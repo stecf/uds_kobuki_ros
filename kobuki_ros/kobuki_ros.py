@@ -121,23 +121,26 @@ class Kobuki(Node):
         while not self.stop_flag:
             response, addr = self.robot_sock.recvfrom(1024)
             kobuki_data = parse_kobuki_message(response)
-            print(kobuki_data.EncoderLeft)
-            print(kobuki_data.EncoderRight)
-            print('-------')
+            # print(kobuki_data.EncoderLeft)
+            # print(kobuki_data.EncoderRight)
+            # print('-------')
             sleep(0.01)
         print("While loop ended")
 
 def main(args=None):
     rclpy.init(args=args)
 
-    kobuki = Kobuki()
+    try:
+        kobuki = Kobuki()
+        rclpy.spin(kobuki)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        kobuki.stop_flag = True
 
-    rclpy.spin(kobuki)
-
-    # Destroy the node explicitly
-    kobuki.destroy_node()
-    del kobuki
-    rclpy.shutdown()
+        # Destroy the node explicitly
+        kobuki.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
