@@ -1,102 +1,49 @@
 import rclpy
+from rclpy.time import Time
 from rclpy.node import Node
 
+from nav_msgs.msg import Odometry
+
+import math
 import socket
 import threading
-from time import sleep
+from time import sleep, time
+from operator import add
 
+from .kobuki import *
 from .defines import *
-
-def check_checksum(data):
-    chckSum = 0
-    for i in range(data[0] + 2):
-        chckSum ^= data[i]
-    return chckSum  # Returns 0 if everything is correct, otherwise some number
-
-def set_sound(noteinHz, duration):
-    notevalue = int(1.0 / (noteinHz * 0.00000275) + 0.5)
-    message = [0xaa, 0x55, 0x09, 0x0c, 0x02, 0xf0, 0x00, 0x03, 0x03, notevalue % 256, notevalue >> 8, duration % 256, 0x00]
-    message[12] = message[2] ^ message[3] ^ message[4] ^ message[5] ^ message[6] ^ message[7] ^ message[8] ^ message[9] ^ message[10] ^ message[11]
-    return message
-
-def set_rotation_speed(radpersec):
-    speedvalue = int(radpersec * 230.0 / 2.0)
-    message = [0xaa, 0x55, 0x0a, 0x0c, 0x02, 0xf0, 0x00, 0x01, 0x04, speedvalue % 256, speedvalue >> 8, 0x01, 0x00, 0x00]
-    message[13] = message[2] ^ message[3] ^ message[4] ^ message[5] ^ message[6] ^ message[7] ^ message[8] ^ message[9] ^ message[10] ^ message[11] ^ message[12]
-    return message
-
-def parse_kobuki_message(data):
-    return_value = check_checksum(data)
-    # if checksum is bad, then ignore
-    if return_value != 0:
-        Warning('Bad checksum ignoring message')
-
-    output = TKobukiData()
-
-    checked_value = 1
-    # while not at the end of the data length
-    while checked_value < data[0]:
-        # basic data subload
-        if data[checked_value] == 0x01:
-            checked_value += 1
-            if data[checked_value] != 0x0F:
-                Warning('Bad ts byte ignoring message')
-            checked_value += 1
-            output.timestamp = data[checked_value + 1] * 256 + data[checked_value]
-            checked_value += 2
-            output.BumperCenter = bool(data[checked_value] & 0x02)
-            output.BumperLeft = bool(data[checked_value] & 0x04)
-            output.BumperRight = bool(data[checked_value] & 0x01)
-            checked_value += 1
-            output.WheelDropLeft = bool(data[checked_value] & 0x02)
-            output.WheelDropRight = bool(data[checked_value] & 0x01)
-            checked_value += 1
-            output.CliffCenter = bool(data[checked_value] & 0x02)
-            output.CliffLeft = bool(data[checked_value] & 0x04)
-            output.CliffRight = bool(data[checked_value] & 0x01)
-            checked_value += 1
-            output.EncoderLeft = data[checked_value + 1] * 256 + data[checked_value]
-            checked_value += 2
-            output.EncoderRight = data[checked_value + 1] * 256 + data[checked_value]
-            checked_value += 2
-            output.PWMleft = data[checked_value]
-            checked_value += 1
-            output.PWMright = data[checked_value]
-            checked_value += 1
-            output.ButtonPress = data[checked_value]
-            checked_value += 1
-            output.Charger = data[checked_value]
-            checked_value += 1
-            output.Battery = data[checked_value]
-            checked_value += 1
-            output.overCurrent = data[checked_value]
-            checked_value += 1
-        elif data[checked_value] == 0x03:
-            checked_value += 1
-            if data[checked_value] != 0x03:
-                return -3
-            checked_value += 1
-            output.IRSensorRight = data[checked_value]
-            checked_value += 1
-            output.IRSensorCenter = data[checked_value]
-            checked_value += 1
-            output.IRSensorLeft = data[checked_value]
-            checked_value += 1
-        # other conditions follow the same pattern...
-        # omitted for brevity
-
-        else:
-            checked_value += 1
-            checked_value += data[checked_value] + 1
-
-    return output
+from .mobile_robot import MobileRobot
+from .utils import *
 
 class Kobuki(Node):
     stop_flag = False
+    robot_data: TKobukiData = None
+    mobile_robot = MobileRobot()
+
+    odom = [0.0, 0.0, 0.0]
 
     def __init__(self):
         super().__init__('kobuki')
 
+        self.setup_publishers()
+        self.setup_timers()
+        self.robot_setup_udp()
+        self.get_logger().info(self.get_name() + " initialized")
+
+    def __del__(self):
+        self.robot_sock.close()
+
+    def setup_publishers(self):
+        self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
+
+    def setup_timers(self):
+        self.kobuki_timer = self.create_timer(0.05, self.robot_timer_callback)
+
+        # FIXME: remove me
+        self.debug_timer_start = time()
+        self.debug_timer = self.create_timer(0.1, self.debug_timer_callback)
+
+    def robot_setup_udp(self):
         self.port = ROBOT_UDP_PORT
         self.robot_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -106,26 +53,80 @@ class Kobuki(Node):
         # Send the message to the server
         self.robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
 
+        self.receiver_thread = threading.Thread(target=self.robot_udp_receiver_callback)
+        self.receiver_thread.start()
+
+    def robot_timer_callback(self):
+        if not self.robot_data:
+            return
+        
+        now = self.get_clock().now()
+
+        self.publish_odometry(now)
+
+    def debug_timer_callback(self):
+        if not hasattr(self, 'debug_iter'):
+            self.debug_iter = 0.0
+        else:
+            self.debug_iter += 0.2
+
         # Send command
-        message = set_rotation_speed(1)
+        if (time() - self.debug_timer_start) > 5.0:
+            self.debug_timer.cancel()
+            message = set_translation_speed(0)
+        else:
+            message = set_translation_speed(int(math.sin(self.debug_iter) * 1000) & 0xffff)
         message_bytes = bytes(message)
         self.robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
 
-        self.receiver_thread = threading.Thread(target=self.udp_receiver)
-        self.receiver_thread.start()
-
-    def __del__(self):
-        self.robot_sock.close()
-
-    def udp_receiver(self):
+    def robot_udp_receiver_callback(self):
         while not self.stop_flag:
-            response, addr = self.robot_sock.recvfrom(1024)
-            kobuki_data = parse_kobuki_message(response)
+            response, _ = self.robot_sock.recvfrom(1024)
+            self.robot_data = parse_kobuki_message(response)
             # print(kobuki_data.EncoderLeft)
             # print(kobuki_data.EncoderRight)
             # print('-------')
-            sleep(0.01)
+            # sleep(0.01)
         print("While loop ended")
+    
+    '''
+    Based on https://github.com/kobuki-base/kobuki_core/blob/e2f0feac0f7a9964d021ac3241b7663f7728d5b9/src/driver/diff_drive.cpp#L51
+    '''
+    def publish_odometry(self, stamp: Time):
+        # Calculate new robot state 
+        pose_update, pose_update_rates = self.mobile_robot.update_diff_drive(
+            self.robot_data.timestamp,
+            self.robot_data.EncoderLeft,
+            self.robot_data.EncoderRight)
+    
+        # Update odometry
+        self.odom = list(map(add, self.odom, pose_update))
+        self.odom[2] = wrap_angle(self.odom[2])
+
+        msg = Odometry()
+        msg.header.stamp = stamp.to_msg()
+        msg.header.frame_id = 'odom'
+        msg.child_frame_id = 'base_link'
+        # Position
+        msg.pose.pose.position.x = self.odom[0]
+        msg.pose.pose.position.y = self.odom[1]
+        msg.pose.pose.position.z = 0.0
+        # Orientation
+        quat = yaw_to_quaternion(self.odom[2])
+        msg.pose.pose.orientation.x = 0.0
+        msg.pose.pose.orientation.y = 0.0
+        msg.pose.pose.orientation.z = quat[2]
+        msg.pose.pose.orientation.w = quat[3]
+        # Linear velocity
+        msg.twist.twist.linear.x = pose_update_rates[0]
+        msg.twist.twist.linear.y = pose_update_rates[1]
+        msg.twist.twist.linear.z = 0.0
+        # Angular velocity
+        msg.twist.twist.angular.x = 0.0
+        msg.twist.twist.angular.y = 0.0
+        msg.twist.twist.angular.z = pose_update_rates[2]
+
+        self.odom_pub.publish(msg)
 
 def main(args=None):
     rclpy.init(args=args)
