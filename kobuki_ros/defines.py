@@ -1,3 +1,5 @@
+from typing import List
+
 class TRawGyroData:
     def __init__(self, x=0, y=0, z=0):
         self.x = x  # unsigned short
@@ -57,6 +59,20 @@ class TKobukiData:
         self.analogInputCh2 = 0  # unsigned short
         self.analogInputCh3 = 0  # unsigned short
         self.extraInfo = TExtraRequestData()  # TExtraRequestData
+
+class LaserData:
+    def __init__(self):
+        self.scanQuality: int = 0
+        self.scanAngle: float = 0.0
+        self.scanDistance: float = 0.0
+        
+    def __str__(self):
+        return f'Quality: {self.scanQuality}, Angle: {self.scanAngle}, Distance: {self.scanDistance}'
+
+class TLaserMeasurement:
+    def __init__(self):
+        self.numberOfScans: int = 0
+        self.Data: List[LaserData] = []
 
 
 # Define the IP address and port number
