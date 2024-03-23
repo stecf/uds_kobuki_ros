@@ -8,8 +8,7 @@ from geometry_msgs.msg import Twist
 import math
 import socket
 import threading
-from time import sleep, time
-from operator import add
+from time import time
 from typing import List
 
 from .kobuki import *
@@ -46,19 +45,13 @@ class Kobuki(Node):
         self.kobuki_timer = self.create_timer(0.05, self.robot_timer_callback)
         self.cmd_vel_timer = self.create_timer(0.2, self.cmd_vel_timeout_callback)
 
-        # # FIXME: remove me
-        # self.debug_timer_start = time()
-        # self.debug_timer = self.create_timer(0.1, self.debug_timer_callback)
-
     def robot_setup_udp(self):
         self.port = ROBOT_UDP_PORT
         self.robot_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         # Message to be sent
         message = set_sound(440, 1000)
-        message_bytes = bytes(message)
-        # Send the message to the server
-        self.robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
+        self.send_udp_message(message)
 
         self.receiver_thread = threading.Thread(target=self.robot_udp_receiver_callback)
         self.receiver_thread.start()
@@ -89,30 +82,11 @@ class Kobuki(Node):
         message = set_translation_speed(0)
         self.send_udp_message(message)
 
-    def debug_timer_callback(self):
-        if not hasattr(self, 'debug_iter'):
-            self.debug_iter = 0.0
-        else:
-            self.debug_iter += 0.2
-
-        # Send command
-        if (time() - self.debug_timer_start) > 5.0:
-            self.debug_timer.cancel()
-            message = set_translation_speed(0)
-        else:
-            message = set_translation_speed(int(math.sin(self.debug_iter) * 1000) & 0xffff)
-        message_bytes = bytes(message)
-        self.robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
-
     def robot_udp_receiver_callback(self):
         while not self.stop_flag:
             response, _ = self.robot_sock.recvfrom(1024)
             self.robot_data = parse_kobuki_message(response)
-            # print(kobuki_data.EncoderLeft)
-            # print(kobuki_data.EncoderRight)
-            # print('-------')
-            # sleep(0.01)
-        print("While loop ended")
+        print("UDP receiver stopped")
     
     def send_udp_message(self, message: List[int]):
         message_bytes = bytes(message)
