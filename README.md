@@ -58,3 +58,9 @@ Settings -> System -> For developers -> Developer mode to On
     ```
     ros2 run uds_kobuki_ros uds_kobuki_ros
     ```
+
+6. Install `uds_kobuki_ros`
+
+    ```
+    colcon build --symlink-install --merge-install --packages-select uds_kobuki_ros --install-base c:\opt\install
+    ```
