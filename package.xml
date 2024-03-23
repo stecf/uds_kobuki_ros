@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>kobuki_ros</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <name>uds_kobuki_ros</name>
+  <version>1.0.0</version>
+  <description>ROS 2 runtime software for Kobuki, Yujin Robot's mobile research base.</description>
   <maintainer email="filip.stec@stuba.sk">fstec</maintainer>
-  <license>TODO: License declaration</license>
+  <license>gplv3</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>nav_msgs</exec_depend>

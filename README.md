@@ -1,4 +1,4 @@
-# Kobuki ROS
+# UDS Kobuki ROS
 
 ## Windows
 
@@ -46,15 +46,15 @@ Settings -> System -> For developers -> Developer mode to On
     cd ros2_ws\src
     git clone ...
     ```
-4. Build `kobuki_ros` package
+4. Build `uds_kobuki_ros` package
 
     ```
     cd ..
-    colcon build --symlink-install --merge-install --packages-select kobuki_ros
+    colcon build --symlink-install --merge-install --packages-select uds_kobuki_ros
     call install/local_setup.bat
     ```
-5. Run `kobuki_ros`
+5. Run `uds_kobuki_ros`
 
     ```
-    ros2 run kobuki_ros kobuki_ros
+    ros2 run uds_kobuki_ros uds_kobuki_ros
     ```
