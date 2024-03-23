@@ -1,5 +1,6 @@
 import socket
 from time import sleep, time
+import math
 
 from .defines import *
 
@@ -19,21 +20,23 @@ def set_led(led1, led2):
     return message
 
 def set_translation_speed(mmpersec):
+    mmpersec = int(mmpersec) & 0xffff
     message = [0xaa, 0x55, 0x0a, 0x0c, 0x02, 0xf0, 0x00, 0x01, 0x04, mmpersec % 256, mmpersec >> 8, 0x00, 0x00, 0x00]
     message[13] = message[2] ^ message[3] ^ message[4] ^ message[5] ^ message[6] ^ message[7] ^ message[8] ^ message[9] ^ message[10] ^ message[11] ^ message[12]
     return message
 
 def set_rotation_speed(radpersec):
-    speedvalue = int(radpersec * 230.0 / 2.0)
+    speedvalue = int(radpersec * 230.0 / 2.0) & 0xffff
     message = [0xaa, 0x55, 0x0a, 0x0c, 0x02, 0xf0, 0x00, 0x01, 0x04, speedvalue % 256, speedvalue >> 8, 0x01, 0x00, 0x00]
     message[13] = message[2] ^ message[3] ^ message[4] ^ message[5] ^ message[6] ^ message[7] ^ message[8] ^ message[9] ^ message[10] ^ message[11] ^ message[12]
     return message
 
 def set_arc_speed(mmpersec, radius):
-    if radius == 0:
+    if math.isclose(radius, 0.0):
         return set_translation_speed(mmpersec)
 
-    speedvalue = mmpersec * ((radius + (230 if radius > 0 else -230)) // 2) // radius
+    speedvalue = int(mmpersec * ((radius + (230 if radius > 0 else -230)) // 2) // radius) & 0xffff
+    radius = int(radius) & 0xffff
     message = [0xaa, 0x55, 0x0a, 0x0c, 0x02, 0xf0, 0x00, 0x01, 0x04, speedvalue % 256, speedvalue >> 8, radius % 256, radius >> 8, 0x00]
     message[13] = message[2] ^ message[3] ^ message[4] ^ message[5] ^ message[6] ^ message[7] ^ message[8] ^ message[9] ^ message[10] ^ message[11] ^ message[12]
     return message

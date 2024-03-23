@@ -3,12 +3,14 @@ from rclpy.time import Time
 from rclpy.node import Node
 
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist
 
 import math
 import socket
 import threading
 from time import sleep, time
 from operator import add
+from typing import List
 
 from .kobuki import *
 from .defines import *
@@ -26,6 +28,7 @@ class Kobuki(Node):
         super().__init__('kobuki')
 
         self.setup_publishers()
+        self.setup_subscribers()
         self.setup_timers()
         self.robot_setup_udp()
         self.get_logger().info(self.get_name() + " initialized")
@@ -36,12 +39,16 @@ class Kobuki(Node):
     def setup_publishers(self):
         self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
 
+    def setup_subscribers(self):
+        self.cmd_vel_sub = self.create_subscription(Twist, 'cmd_vel', self.cmd_vel_callback, 10)
+
     def setup_timers(self):
         self.kobuki_timer = self.create_timer(0.05, self.robot_timer_callback)
+        self.cmd_vel_timer = self.create_timer(0.2, self.cmd_vel_timeout_callback)
 
-        # FIXME: remove me
-        self.debug_timer_start = time()
-        self.debug_timer = self.create_timer(0.1, self.debug_timer_callback)
+        # # FIXME: remove me
+        # self.debug_timer_start = time()
+        # self.debug_timer = self.create_timer(0.1, self.debug_timer_callback)
 
     def robot_setup_udp(self):
         self.port = ROBOT_UDP_PORT
@@ -56,6 +63,19 @@ class Kobuki(Node):
         self.receiver_thread = threading.Thread(target=self.robot_udp_receiver_callback)
         self.receiver_thread.start()
 
+    def cmd_vel_callback(self, msg: Twist):
+        # Reset timeout of cmd_vel command
+        self.cmd_vel_timer.reset()
+        
+        if math.isclose(msg.angular.z, 0.0):
+            message = set_translation_speed(msg.linear.x * 1000)
+        elif math.isclose(msg.linear.x, 0.0):
+            message = set_rotation_speed(msg.angular.z)
+        else:
+            radius = (msg.linear.x * 1000) / msg.angular.z
+            message = set_arc_speed(msg.linear.x * 1000, radius)
+        self.send_udp_message(message)
+
     def robot_timer_callback(self):
         if not self.robot_data:
             return
@@ -63,6 +83,11 @@ class Kobuki(Node):
         now = self.get_clock().now()
 
         self.publish_odometry(now)
+    
+    def cmd_vel_timeout_callback(self):
+        '''Stop the robot when cmd_vel command does not arrive for 0.2s.'''
+        message = set_translation_speed(0)
+        self.send_udp_message(message)
 
     def debug_timer_callback(self):
         if not hasattr(self, 'debug_iter'):
@@ -89,6 +114,10 @@ class Kobuki(Node):
             # sleep(0.01)
         print("While loop ended")
     
+    def send_udp_message(self, message: List[int]):
+        message_bytes = bytes(message)
+        self.robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
+
     '''
     Based on https://github.com/kobuki-base/kobuki_core/blob/e2f0feac0f7a9964d021ac3241b7663f7728d5b9/src/driver/diff_drive.cpp#L51
     '''
@@ -100,8 +129,10 @@ class Kobuki(Node):
             self.robot_data.EncoderRight)
     
         # Update odometry
-        self.odom = list(map(add, self.odom, pose_update))
-        self.odom[2] = wrap_angle(self.odom[2])
+        if not math.isclose(pose_update[0], 0.0):
+            self.odom[0] += math.cos(self.odom[2]) * pose_update[0]
+            self.odom[1] += math.sin(self.odom[2]) * pose_update[0]
+        self.odom[2] = wrap_angle(self.odom[2] + pose_update[2])
 
         msg = Odometry()
         msg.header.stamp = stamp.to_msg()
