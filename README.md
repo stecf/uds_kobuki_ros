@@ -264,7 +264,7 @@ ROS2 Foxy is supported at Tier 1 on Ubuntu 20.04. On other versions of linux, it
 
 1. Start Kobuki Simulator and Start robot
     1. Using shortcut
-    2. Using executable `/usr/local/bin/kobukiSIM`
+    2. Using executable `cd /opt/kobuki/sim && ./kobukiSIM`
 2. Start Kobuki ROS
     1. Using shortcut
     2. Using script in terminal `/opt/kobuki/install/share/uds_kobuki_ros/run.sh`
