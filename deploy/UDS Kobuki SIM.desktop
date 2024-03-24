@@ -1,0 +1,11 @@
+[Desktop Entry]
+VERSION=1.0.0
+Name=UDS Kobuki SIM
+Comment=Run UDS Kobuki Simulator
+Path=/opt/kobuki/sim
+Exec=kobukiSIM
+Icon=/opt/kobuki/install/share/uds_kobuki_ros/Kobuki.ico
+Type=Application
+StartupNotify=true
+Terminal=false
+Categories=Application;

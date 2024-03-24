@@ -1,0 +1,10 @@
+[Desktop Entry]
+VERSION=1.0.0
+Name=UDS Kobuki ROS
+Comment=Run UDS Kobuki ROS node
+Exec=/opt/kobuki/install/share/uds_kobuki_ros/run.sh
+Icon=/opt/kobuki/install/share/uds_kobuki_ros/Kobuki.ico
+Type=Application
+StartupNotify=true
+Terminal=true
+Categories=Application;

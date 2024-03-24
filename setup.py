@@ -11,7 +11,7 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
-        ('share/' + package_name, ['package.xml', 'deploy/run.bat', 'deploy/Kobuki.ico', 'deploy/UDS Kobuki ROS.lnk']),
+        ('share/' + package_name, ['package.xml', 'deploy/run.bat', 'deploy/Kobuki.ico', 'deploy/run.sh']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
