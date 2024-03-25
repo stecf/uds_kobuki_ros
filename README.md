@@ -13,7 +13,7 @@ There are some changes based on the version of Windows, here are the guides from
 
     ![](docs/VisualStudioSetup.png)
 
-3. [Windows 11] Install Windows Package Manager Chocolatey. This will be used to install ROS2 and other dependencies.
+3. Install Windows Package Manager Chocolatey. This will be used to install ROS2 and other dependencies.
     1. In the Start Menu, find the "x64 Native Tools Command Prompt for VS 2019" item.
     2. Right Click, select More then "Run as Administrator"
     3. Download and install Chocolatey using this command in the terminal, approving any prompts
