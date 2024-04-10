@@ -1,5 +1,7 @@
 # UDS Kobuki ROS
 
+![Kobuki schema](docs/Kobuki.png)
+
 ## Windows
 
 ### Install ROS2 Foxy
@@ -13,7 +15,7 @@ There are some changes based on the version of Windows, here are the guides from
 
     ![](docs/VisualStudioSetup.png)
 
-3. [Windows 11] Install Windows Package Manager Chocolatey. This will be used to install ROS2 and other dependencies.
+3. Install Windows Package Manager Chocolatey. This will be used to install ROS2 and other dependencies.
     1. In the Start Menu, find the "x64 Native Tools Command Prompt for VS 2019" item.
     2. Right Click, select More then "Run as Administrator"
     3. Download and install Chocolatey using this command in the terminal, approving any prompts
@@ -46,7 +48,7 @@ There are some changes based on the version of Windows, here are the guides from
         ```
 
 5. Test ROS2 Installation using example talker and listener
-    1. In the Start Menu, find the "x64 Native Tools Command Prompt for VS 2019" item as administrator.
+    1. In the Start Menu, find the "x64 Native Tools Command Prompt for VS 2019" item (don't start it as admin).
     2. Activate ROS2 environment (this needs to be run on every new terminal using ROS2 Foxy)
 
         ```bash
@@ -154,7 +156,7 @@ ROS2 Foxy is supported at Tier 1 on Ubuntu 20.04. On other versions of linux, it
     sudo apt update && sudo apt upgrade
 
     # Desktop Install (Recommended): ROS, RViz, demos, tutorials.
-    sudo apt install ros-foxy-desktop python3-argcomplete
+    sudo apt install ros-foxy-desktop python3-argcomplete python3-colcon-common-extensions
     ```
 
 4. ROS2 environment setup
