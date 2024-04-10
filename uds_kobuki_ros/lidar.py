@@ -46,7 +46,7 @@ def main():
         message = 0x00
         message_bytes = bytes(message)
         # Send the message to the server
-        lidar_sock.sendto(message_bytes, (UDP_IP, LIDAR_UDP_PORT))
+        lidar_sock.sendto(message_bytes, (UDP_IP, LIDAR_UDP_PORT_UP))
 
         while True:
             # Receive the response from the server

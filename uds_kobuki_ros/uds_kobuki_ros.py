@@ -18,8 +18,11 @@ import rclpy
 from rclpy.time import Time
 from rclpy.node import Node
 
+from tf2_ros import TransformBroadcaster
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, TransformStamped
 from sensor_msgs.msg import LaserScan
 
 import math
@@ -45,9 +48,11 @@ class Kobuki(Node):
     def __init__(self):
         super().__init__('kobuki')
 
+        self.setup_parameters()
         self.setup_publishers()
         self.setup_subscribers()
         self.setup_timers()
+        self.publish_static_tf()
         self.robot_setup_udp()
         self.lidar_setup_udp()
         self.get_logger().info(self.get_name() + " initialized")
@@ -56,9 +61,24 @@ class Kobuki(Node):
         self.robot_sock.close()
         self.lidar_sock.close()
 
+    def setup_parameters(self):
+        self.declare_parameter('ip_address', '127.0.0.1')
+        self.declare_parameter('robot_upd_port_up', 5300)
+        self.declare_parameter('robot_upd_port_down', 53000)
+        self.declare_parameter('lidar_upd_port_up', 5299)
+        self.declare_parameter('lidar_upd_port_down', 52999)
+
+        self.ip_address = self.get_parameter('ip_address').get_parameter_value().string_value
+        self.robot_upd_port_up = self.get_parameter('robot_upd_port_up').get_parameter_value().integer_value
+        self.robot_upd_port_down = self.get_parameter('robot_upd_port_down').get_parameter_value().integer_value
+        self.lidar_upd_port_up = self.get_parameter('lidar_upd_port_up').get_parameter_value().integer_value
+        self.lidar_upd_port_down = self.get_parameter('lidar_upd_port_down').get_parameter_value().integer_value
+
     def setup_publishers(self):
         self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
         self.laser_scan_pub = self.create_publisher(LaserScan, 'scan', 10)
+        self.tf_broadcaster = TransformBroadcaster(self)
+        self.tf_static_broadcaster = StaticTransformBroadcaster(self)
 
     def setup_subscribers(self):
         self.cmd_vel_sub = self.create_subscription(Twist, 'cmd_vel', self.cmd_vel_callback, 10)
@@ -67,8 +87,13 @@ class Kobuki(Node):
         self.main_timer = self.create_timer(0.05, self.main_timer_callback)
         self.cmd_vel_timer = self.create_timer(0.2, self.cmd_vel_timeout_callback)
 
+    def publish_static_tf(self):
+        self.map_to_odom_tf()
+        self.base_link_to_base_laser_tf()
+
     def robot_setup_udp(self):
         self.robot_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.robot_sock.bind(("0.0.0.0", self.robot_upd_port_down))
 
         # Message to be sent
         message = set_sound(440, 1000)
@@ -79,6 +104,7 @@ class Kobuki(Node):
 
     def lidar_setup_udp(self):
         self.lidar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.lidar_sock.bind(("0.0.0.0", self.lidar_upd_port_down))
 
         # Message to be sent
         message = 0x00
@@ -134,11 +160,11 @@ class Kobuki(Node):
     
     def send_robot_udp_message(self, message: List[int]):
         message_bytes = bytes(message)
-        self.robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
+        self.robot_sock.sendto(message_bytes, (self.ip_address, self.robot_upd_port_up))
     
     def send_lidar_udp_message(self, message: List[int]):
         message_bytes = bytes(message)
-        self.lidar_sock.sendto(message_bytes, (UDP_IP, LIDAR_UDP_PORT))
+        self.lidar_sock.sendto(message_bytes, (self.ip_address, self.lidar_upd_port_up))
 
     '''
     Based on https://github.com/kobuki-base/kobuki_core/blob/e2f0feac0f7a9964d021ac3241b7663f7728d5b9/src/driver/diff_drive.cpp#L51
@@ -180,26 +206,75 @@ class Kobuki(Node):
         msg.twist.twist.angular.z = pose_update_rates[2]
 
         self.odom_pub.publish(msg)
+        self.odom_to_base_link_tf(msg)
 
     def publish_laser_scan(self, stamp: Time):
         msg = LaserScan()
         msg.header.stamp = stamp.to_msg()
         msg.header.frame_id = 'base_laser'
 
-        msg.angle_min = math.radians(self.lidar_data.Data[0].scanAngle)
-        msg.angle_max = math.radians(self.lidar_data.Data[-1].scanAngle)
+        # Sort to angles ascending
+        angles, msg.ranges = zip(*sorted(zip([x.scanAngle for x in self.lidar_data.Data], [x.scanDistance * 1e-3 for x in self.lidar_data.Data]), reverse=True))
+
+        msg.angle_min = math.radians(angles[-1])
+        msg.angle_max = math.radians(angles[0])
         msg.angle_increment = (msg.angle_max - msg.angle_min) / (self.lidar_data.numberOfScans - 1)
 
         msg.time_increment = 0.0
         msg.scan_time = 0.17
 
-        msg.range_min = 0.0
+        msg.range_min = 0.15
         msg.range_max = 5.0
-
-        for scan in self.lidar_data.Data:
-            msg.ranges.append(scan.scanDistance * 1e-3)
         
         self.laser_scan_pub.publish(msg)
+    
+    def base_link_to_base_laser_tf(self):
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = "base_link"
+        t.child_frame_id = "base_laser"
+
+        t.transform.translation.x = 0.0
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.15
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
+
+        self.tf_static_broadcaster.sendTransform(t)
+    
+    def map_to_odom_tf(self):
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = "map"
+        t.child_frame_id = "odom"
+
+        t.transform.translation.x = 0.0
+        t.transform.translation.y = 0.0
+        t.transform.translation.z = 0.0
+        t.transform.rotation.x = 0.0
+        t.transform.rotation.y = 0.0
+        t.transform.rotation.z = 0.0
+        t.transform.rotation.w = 1.0
+
+        self.tf_static_broadcaster.sendTransform(t)
+    
+    def odom_to_base_link_tf(self, msg: Odometry):
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = "odom"
+        t.child_frame_id = "base_link"
+
+        t.transform.translation.x = msg.pose.pose.position.x
+        t.transform.translation.y = msg.pose.pose.position.y
+        t.transform.translation.z = 0.1
+        t.transform.rotation.x = msg.pose.pose.orientation.x
+        t.transform.rotation.y = msg.pose.pose.orientation.y
+        t.transform.rotation.z = msg.pose.pose.orientation.z
+        t.transform.rotation.w = msg.pose.pose.orientation.w
+
+        self.tf_broadcaster.sendTransform(t)
 
 def main(args=None):
     rclpy.init(args=args)

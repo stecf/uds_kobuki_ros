@@ -147,12 +147,12 @@ def main():
         message = set_sound(440, 1000)
         message_bytes = bytes(message)
         # Send the message to the server
-        robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
+        robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT_UP))
 
         # Send command
         message = set_rotation_speed(1)
         message_bytes = bytes(message)
-        robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT))
+        robot_sock.sendto(message_bytes, (UDP_IP, ROBOT_UDP_PORT_UP))
 
         while True:
             # Receive the response from the server
