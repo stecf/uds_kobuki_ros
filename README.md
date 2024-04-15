@@ -246,14 +246,14 @@ ROS2 Foxy is supported at Tier 1 on Ubuntu 20.04. On other versions of linux, it
 
     ```bash
     cd ..
-    colcon build --symlink-install --merge-install --packages-select uds_kobuki_ros
+    colcon build --symlink-install --packages-select uds_kobuki_ros
     source install/local_setup.bash
     ```
 
 5. Install `uds_kobuki_ros`
 
     ```bash
-    sudo colcon build --symlink-install --merge-install --packages-select uds_kobuki_ros --install-base /opt/kobuki/install
+    sudo colcon build --symlink-install --packages-select uds_kobuki_ros --install-base /opt/kobuki/install
     source /opt/install/setup.bash
 
     # [Optional] Permanent setup of ROS2 workspace
